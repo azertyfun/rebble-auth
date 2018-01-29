@@ -1,10 +1,12 @@
 package db
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log"
-	"math/rand"
+	"math/big"
 	"strings"
 	"time"
 
@@ -16,18 +18,17 @@ type Handler struct {
 	*sql.DB
 }
 
-func init() {
-	// We need to seed the RNG which is used by generateSessionId()
-	rand.Seed(time.Now().UnixNano())
-}
-
-// generateAccessToken() generates a pseudo-random fixed-length base64 string
+// generateAccessToken() generates a pseudo-random fixed-length string
 func generateAccessToken() string {
 	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_"
 
 	b := make([]byte, 50)
 	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
+		if err != nil {
+			panic(fmt.Errorf("Could not generate random number: %v", err))
+		}
+		b[i] = letters[n.Int64()]
 	}
 
 	return string(b)
