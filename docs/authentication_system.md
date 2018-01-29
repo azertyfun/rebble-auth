@@ -47,10 +47,14 @@ Response:
 
 Create a user session tied to the provided authentication code (once the access token expires, so does the session).
 
+The authentication code is returned from an implicit OpenID/OAuth request to one of the SSOs (see [google's documentation page](https://developers.google.com/identity/protocols/OpenIDConnect#sendauthrequest) for more information).
+
+The authentication service will handle the rest of the authentication with the SSO, and return an access token to use Rebble services.
+
 Query:
 ```JSON
 {
-    "code": "<authorization code>",
+    "code": "<authentication code>",
     "authProvider": "<OpenID provider>"
 }
 ```
@@ -123,32 +127,7 @@ If an error occured when retrieving the name (such as invalid id), the name will
 SQL Structure
 -------------
 
-```SQL
-create table users (
-    id text not null primary key,
-    provider text not null,
-    sub text not null,
-    name text not null,
-    type text nont null default 'user',
-    pebbleMirror integer not null,
-    disabled integer not null
-);
-
-create table userSessions (
-    accessToken text not null primary key,
-    userId text not null,
-    access_token text not null,
-    expires integer not null
-);
-
-create table userLogins (
-    id integer not null primary key,
-    userId text not null,
-    remoteIp text not null,
-    time integer not null,
-    success integer not null
-);
-```
+See `rebbleHandlers/admin.go`
 
 * `users` contains the user account information;
 * `userSessions` contains all active session (*however, an active session is not necessarily a valid session; the access_token might be invalid);
