@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"math/big"
 	"strings"
 	"time"
@@ -51,8 +50,6 @@ func createSession(tx *sql.Tx, userId string, ssoAccessToken string, expires int
 			return "", err
 		}
 	}
-
-	log.Println("Creating user session for " + userId)
 
 	_, err = tx.Exec("INSERT INTO userSessions(accessToken, ssoAccessToken, userId, expires) VALUES (?, ?, ?, ?)", accessToken, ssoAccessToken, userId, expires)
 	if err != nil {
@@ -118,7 +115,7 @@ func (handler Handler) AccountLoginOrRegister(provider string, sub string, name 
 	}
 
 	// Log successful login attempt
-	_, err = tx.Exec("INSERT INTO userLogins(userId, remoteIp, time, success) VALUES (?, ?, ?, 1)", userId, remoteIp, time.Now().UnixNano())
+	_, err = tx.Exec("INSERT INTO userLoginLog(userId, remoteIp, time, success) VALUES (?, ?, ?, 1)", userId, remoteIp, time.Now().UnixNano())
 	if err != nil {
 		return "", "Internal server error", err
 	}

@@ -81,8 +81,8 @@ func AdminRebuildDBHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.R
 			);
 			delete from userSessions;
 
-			drop table if exists userLogins;
-			create table userLogins (
+			drop table if exists userLoginLog;
+			create table userLoginLog (
 				id integer not null primary key,
 				userId text not null,
 				remoteIp text not null,

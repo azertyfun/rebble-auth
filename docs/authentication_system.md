@@ -131,4 +131,4 @@ See `rebbleHandlers/admin.go`
 
 * `users` contains the user account information;
 * `userSessions` contains all active session (*however, an active session is not necessarily a valid session; the access_token might be invalid);
-* `userLogins` contains a log of all user logins for administrative purposes.
+* `userLoginLog` contains a log of all user logins for administrative purposes.
