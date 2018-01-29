@@ -22,6 +22,7 @@ import (
 type config struct {
 	Ssos           []sso.Sso `json":ssos"`
 	AllowedDomains []string  `json:"allowed_domains"`
+	HTTPS          bool      `json:"https"`
 }
 
 func main() {
@@ -41,6 +42,7 @@ func main() {
 	var version bool
 
 	getopt.BoolVarLong(&version, "version", 'V', "Get the current version info")
+	getopt.BoolVarLong(&config.HTTPS, "https", 'h', "Set whether or not to use HTTPS (defaults to true)")
 	getopt.Parse()
 	if version {
 		fmt.Fprintf(os.Stderr, "Version %s\nBuild Host: %s\nBuild Date: %s\nBuild Hash: %s\n", common.Buildversionstring, common.Buildhost, common.Buildstamp, common.Buildgithash)
@@ -82,7 +84,11 @@ func main() {
 	r := rebbleHandlers.Handlers(context)
 	loggedRouter := handlers.LoggingHandler(os.Stdout, r)
 	http.Handle("/", r)
-	err = http.ListenAndServeTLS(":8082", "server.crt", "server.key", loggedRouter)
+	if config.HTTPS {
+		err = http.ListenAndServeTLS(":8082", "server.crt", "server.key", loggedRouter)
+	} else {
+		err = http.ListenAndServe(":8082", loggedRouter)
+	}
 	if err != nil {
 		panic("Could not listen and serve TLS: " + err.Error())
 	}

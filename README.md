@@ -9,6 +9,14 @@ If you want to contribute join us on the [Pebble Dev Discord server](http://disc
 ## Dev Environment Setup
 Pull down the project within your `$GOPATH`'s src folder ($GOPATH is an environment variable and is typically set to $HOME/go/ on \*nix). This can be done by running (for example) the following set of commands:
 
+### TLS
+
+#### Disable TLS
+
+If you want to disable TLS and serve unencrypted HTTP instead, set `HTTPS` to `false` in `rebblestore-api.json`
+
+#### Create certificats
+
 ```shell
 # export GOPATH=~/go/ # Optional if your didn't move your ~/go directory
 mkdir -p $GOPATH/src/pebble-dev
