@@ -4,7 +4,7 @@ If you want to contribute join us on the [Pebble Dev Discord server](http://disc
 
 ## Requirements
 
-`git`, `go`, `npm`, and `apib2swagger`.
+`git`, `go`, and `npm`.
 
 ## Dev Environment Setup
 Pull down the project within your `$GOPATH`'s src folder ($GOPATH is an environment variable and is typically set to $HOME/go/ on \*nix). This can be done by running (for example) the following set of commands:
