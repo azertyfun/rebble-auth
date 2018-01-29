@@ -15,7 +15,7 @@ Pull down the project within your `$GOPATH`'s src folder ($GOPATH is an environm
 
 If you want to disable TLS and serve unencrypted HTTP instead, set `HTTPS` to `false` in `rebblestore-api.json`
 
-#### Create certificats
+#### Create certificates
 
 ```shell
 # export GOPATH=~/go/ # Optional if your didn't move your ~/go directory
