@@ -12,6 +12,7 @@ import (
 	"pebble-dev/rebble-auth/common"
 	"pebble-dev/rebble-auth/db"
 	"pebble-dev/rebble-auth/rebbleHandlers"
+	"pebble-dev/rebble-auth/sso"
 
 	"github.com/gorilla/handlers"
 	_ "github.com/mattn/go-sqlite3"
@@ -19,8 +20,8 @@ import (
 )
 
 type config struct {
-	Ssos           []rebbleHandlers.Sso `json":ssos"`
-	AllowedDomains []string             `json:"allowed_domains"`
+	Ssos           []sso.Sso `json":ssos"`
+	AllowedDomains []string  `json:"allowed_domains"`
 }
 
 func main() {
