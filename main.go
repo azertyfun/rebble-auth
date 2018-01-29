@@ -23,11 +23,14 @@ type config struct {
 	Ssos           []sso.Sso `json":ssos"`
 	AllowedDomains []string  `json:"allowed_domains"`
 	HTTPS          bool      `json:"https"`
+	Database       string    `json:"database"`
 }
 
 func main() {
 	config := config{
 		AllowedDomains: []string{"http://localhost:8080, http://localhost:8081"},
+		HTTPS:          true,
+		Database:       "./rebble-auth.db",
 	}
 
 	file, err := ioutil.ReadFile("./rebble-auth.json")
@@ -43,6 +46,7 @@ func main() {
 
 	getopt.BoolVarLong(&version, "version", 'V', "Get the current version info")
 	getopt.BoolVarLong(&config.HTTPS, "https", 'h', "Set whether or not to use HTTPS (defaults to true)")
+	getopt.StringVarLong(&config.Database, "database", 'd', "Specify a specific SQLite database path (defaults to ./rebble-auth.db)")
 	getopt.Parse()
 	if version {
 		fmt.Fprintf(os.Stderr, "Version %s\nBuild Host: %s\nBuild Date: %s\nBuild Hash: %s\n", common.Buildversionstring, common.Buildhost, common.Buildstamp, common.Buildgithash)
@@ -71,7 +75,7 @@ func main() {
 		defer resp.Body.Close()
 	}
 
-	database, err := sql.Open("sqlite3", "./rebble-auth.db")
+	database, err := sql.Open("sqlite3", config.Database)
 	if err != nil {
 		panic("Could not connect to database" + err.Error())
 	}
