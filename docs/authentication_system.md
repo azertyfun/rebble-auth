@@ -106,12 +106,26 @@ Response:
 }
 ```
 
+### `/user/name/{id}`
+
+Gets user `{id}`'s name
+
+Response:
+```JSON
+{
+    "name": "<name>",
+    "errorMessage": "<error message>"
+}
+
+If an error occured when retrieving the name (such as invalid id), the name will be blank and the error message will be set accordingly.
+```
+
 SQL Structure
 -------------
 
 ```SQL
 create table users (
-    id integer not null primary key,
+    id text not null primary key,
     provider text not null,
     sub text not null,
     name text not null,
@@ -122,14 +136,14 @@ create table users (
 
 create table userSessions (
     accessToken text not null primary key,
-    userId integer not null,
+    userId text not null,
     access_token text not null,
     expires integer not null
 );
 
 create table userLogins (
     id integer not null primary key,
-    userId integer not null,
+    userId text not null,
     remoteIp text not null,
     time integer not null,
     success integer not null

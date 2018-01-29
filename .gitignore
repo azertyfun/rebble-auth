@@ -4,6 +4,7 @@
 *.swp
 *.apib
 /build/
+/PebbleAppStore
 rebble-auth.db
 /rebble-auth.json
 

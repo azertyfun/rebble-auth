@@ -50,6 +50,14 @@ To prevent XSS, we set a CORS header. Set the `allowed_domains` key in `rebble-a
 
 To allow user to authenticate themselves, you will need to get OAuth2 keys for your OpenID providers. Then, fill the `client_id` and `client_secret` fields in the `rebble-auth.json` file.
 
+### Database
+
+Instructions to setup the database:
+
+1. If you haven't already, download a copy of the Pebble App Store by using [this tool](https://github.com/azertyfun/PebbleAppStoreCrawler). To ease the load on fitbit's servers, you can download it directly [here](https://drive.google.com/file/d/0B1rumprSXUAhTjB1aU9GUFVPUW8/view);
+2. Extract the PebbleAppStore folder to the project directory: `tar -xzf PebbleAppStore.tar.gz -C $GOPATH/src/pebble-dev/rebblestore-api`, or if you have already extracted it somewhere, create a link to it using `ln -s /path/to/PebbleAppStore PebbleAppStore`;
+3. Start `./rebblestore-api` and access https://localhost:8080/admin/rebuild/db to rebuild the database.
+
 ## Contributing
 
 ### How Do I Help?

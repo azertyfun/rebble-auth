@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"pebble-dev/rebble-auth/auth"
+
+	"github.com/gorilla/mux"
 )
 
 type accountLogin struct {
@@ -25,6 +27,11 @@ type updateAccount struct {
 
 type updateAccountStatus struct {
 	Success      bool   `json:"success"`
+	ErrorMessage string `json:"errorMessage"`
+}
+
+type nameStatus struct {
+	Name         string `json:"name"`
 	ErrorMessage string `json:"errorMessage"`
 }
 
@@ -143,6 +150,29 @@ func AccountUpdateNameHandler(ctx *HandlerContext, w http.ResponseWriter, r *htt
 
 	status := updateAccountStatus{
 		Success:      success,
+		ErrorMessage: errorMessage,
+	}
+	data, err := json.MarshalIndent(status, "", "\t")
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	// Send the JSON object back to the user
+	w.Header().Add("content-type", "application/json")
+	w.Write(data)
+	return http.StatusOK, nil
+}
+
+// AccountGetnameHandler returns a user's name
+func AccountGetNameHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.Request) (int, error) {
+	name, errorMessage, err := ctx.Database.GetName(mux.Vars(r)["id"])
+
+	if err != nil {
+		log.Println(err)
+	}
+
+	status := nameStatus{
+		Name:         name,
 		ErrorMessage: errorMessage,
 	}
 	data, err := json.MarshalIndent(status, "", "\t")

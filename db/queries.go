@@ -3,8 +3,12 @@ package db
 import (
 	"database/sql"
 	"errors"
+	"log"
 	"math/rand"
+	"strings"
 	"time"
+
+	"github.com/nu7hatch/gouuid"
 )
 
 // Handler contains reference to the database client
@@ -29,7 +33,7 @@ func generateAccessToken() string {
 	return string(b)
 }
 
-func createSession(tx *sql.Tx, userId int, ssoAccessToken string, expires int64) (string, error) {
+func createSession(tx *sql.Tx, userId string, ssoAccessToken string, expires int64) (string, error) {
 	accessToken := generateAccessToken()
 
 	// We check that we have no more than 5 active sessions at a time (for security reasons). Otherwise, we delete the oldest one.
@@ -46,6 +50,8 @@ func createSession(tx *sql.Tx, userId int, ssoAccessToken string, expires int64)
 			return "", err
 		}
 	}
+
+	log.Println("Creating user session for " + userId)
 
 	_, err = tx.Exec("INSERT INTO userSessions(accessToken, ssoAccessToken, userId, expires) VALUES (?, ?, ?, ?)", accessToken, ssoAccessToken, userId, expires)
 	if err != nil {
@@ -65,18 +71,35 @@ func (handler Handler) AccountLoginOrRegister(provider string, sub string, name 
 
 	row := tx.QueryRow("SELECT id, disabled FROM users WHERE provider=? AND sub=?", provider, sub)
 
-	var userId int64
+	var userId string
 	disabled := false
 	err = row.Scan(&userId, &disabled)
+	if err != nil && err != sql.ErrNoRows {
+		return "", "Internal server error", err
+	}
+
 	if err != nil {
 		// User doesn't exist, create account
 
-		// Create user
-		res, err := tx.Exec("INSERT INTO users(provider, sub, name, pebbleMirror, disabled) VALUES (?, ?, ?, 0, 0)", provider, sub, name)
-		if err != nil {
-			return "", "Internal server error", err
+		for {
+			id, err := uuid.NewV4()
+			if err != nil {
+				return "", "Internal server error", err
+			}
+			userId = strings.Replace(id.String(), "-", "", -1)
+
+			row = tx.QueryRow("SELECT id FROM users WHERE id=?", userId)
+			if err := row.Scan(); err != nil {
+				if err == sql.ErrNoRows {
+					break
+				} else {
+					return "", "Internal server error", err
+				}
+			}
 		}
-		userId, err = res.LastInsertId()
+
+		// Create user
+		_, err := tx.Exec("INSERT INTO users(id, provider, sub, name, pebbleMirror, disabled) VALUES (?, ?, ?, ?, 0, 0)", userId, provider, sub, name)
 		if err != nil {
 			return "", "Internal server error", err
 		}
@@ -88,7 +111,7 @@ func (handler Handler) AccountLoginOrRegister(provider string, sub string, name 
 
 	// Create user session
 
-	accessToken, err := createSession(tx, int(userId), ssoAccessToken, expires)
+	accessToken, err := createSession(tx, userId, ssoAccessToken, expires)
 	if err != nil {
 		return "", "Internal server error", err
 	}
@@ -106,7 +129,7 @@ func (handler Handler) AccountLoginOrRegister(provider string, sub string, name 
 
 // AccountExists checks if an account exists
 func (handler Handler) AccountExists(provider string, sub string) (bool, error) {
-	var userId int
+	var userId string
 	row := handler.DB.QueryRow("SELECT id FROM users WHERE provider=? AND sub=?", provider, sub)
 	err := row.Scan(&userId)
 	if err != nil {
@@ -120,12 +143,12 @@ func (handler Handler) AccountExists(provider string, sub string) (bool, error) 
 	return true, nil
 }
 
-func (handler Handler) getAccountId(accessToken string) (int, error) {
-	var userId int
+func (handler Handler) getAccountId(accessToken string) (string, error) {
+	var userId string
 	row := handler.DB.QueryRow("SELECT userId FROM userSessions WHERE accessToken=?", accessToken)
 	err := row.Scan(&userId)
 	if err != nil {
-		return 0, err
+		return "", err
 	}
 
 	return userId, nil
@@ -224,4 +247,19 @@ func (handler Handler) UpdateName(accessToken string, name string) (string, erro
 	}
 
 	return "", nil
+}
+
+// GetName returns (name bool, errMessage string, err error) about the user's name for the given id
+func (handler Handler) GetName(id string) (string, string, error) {
+	var name string
+	row := handler.DB.QueryRow("SELECT name FROM users WHERE id=?", id)
+	err := row.Scan(&name)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", "No user with this ID", nil
+		}
+		return "", "Internal Server Error", err
+	}
+
+	return name, "", nil
 }
