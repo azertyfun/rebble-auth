@@ -8,7 +8,7 @@ import (
 func Handlers(context *HandlerContext) *mux.Router {
 	r := mux.NewRouter()
 	r.Handle("/", routeHandler{context, HomeHandler}).Methods("GET")
-	r.Handle("/user/client_ids", routeHandler{context, ClientIdsHandler}).Methods("GET")
+	r.Handle("/client_ids", routeHandler{context, ClientIdsHandler}).Methods("GET")
 	r.Handle("/user/login", routeHandler{context, AccountLoginHandler}).Methods("POST")
 	r.Handle("/user/info", routeHandler{context, AccountInfoHandler}).Methods("POST")
 	r.Handle("/user/update/name", routeHandler{context, AccountUpdateNameHandler}).Methods("POST")
