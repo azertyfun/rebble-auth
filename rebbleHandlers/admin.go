@@ -62,8 +62,6 @@ func AdminRebuildDBHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.R
 			drop table if exists users;
 			create table users (
 				id text not null primary key,
-				provider text not null,
-				sub text not null,
 				name text not null,
 				type text nont null default 'user',
 				pebbleMirror integer not null,
@@ -74,12 +72,24 @@ func AdminRebuildDBHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.R
 			drop table if exists userSessions;
 			create table userSessions (
 				id integer not null primary key,
-				accessToken text not null,
-				ssoAccessToken text not null,
 				userId text not null,
+				accessToken text not null,
+				refreshToken text not null,
 				expires integer not null
 			);
 			delete from userSessions;
+
+			drop table if exists providerSessions;
+			create table providerSessions (
+				id integer not null primary key,
+				userId text not null,
+				provider text not null,
+				sub text not null,
+				accessToken text not null,
+				refreshToken text not null,
+				expires integer not null
+			);
+			delete from providerSessions;
 
 			drop table if exists userLoginLog;
 			create table userLoginLog (
@@ -89,7 +99,7 @@ func AdminRebuildDBHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.R
 				time integer not null,
 				success integer not null
 			);
-			delete from users;
+			delete from userLoginLog;
 		`
 	_, err := dbHandler.Exec(sqlStmt)
 	if err != nil {
@@ -129,7 +139,10 @@ func AdminRebuildDBHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.R
 	tx, err := dbHandler.Begin()
 	defer tx.Rollback()
 	for id, user := range users {
-		tx.Exec("INSERT INTO users(id, provider, sub, name, type, pebbleMirror, disabled) VALUES (?, 'none', '', ?, 'users', 1, 0)", id, user)
+		_, err := tx.Exec("INSERT INTO users(id, name, type, pebbleMirror, disabled) VALUES (?, ?, 'users', 1, 0)", id, user)
+		if err != nil {
+			log.Printf("Could not insert user into database: %v", err)
+		}
 	}
 	tx.Commit()
 

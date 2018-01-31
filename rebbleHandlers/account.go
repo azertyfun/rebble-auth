@@ -45,60 +45,7 @@ type accountInfo struct {
 	ErrorMessage string `json:"errorMessage"`
 }
 
-func accountLoginFail(message string, err error, w *http.ResponseWriter) error {
-	status := accountLoginStatus{
-		Success:      false,
-		ErrorMessage: message,
-	}
-
-	data, e := json.MarshalIndent(status, "", "\t")
-	if e != nil {
-		return e
-	}
-
-	// Send the JSON object back to the user
-	(*w).Header().Add("content-type", "application/json")
-	(*w).Write(data)
-
-	log.Println(err)
-
-	return nil
-}
-
-// AccountLoginHandler handles the login of a user
-func AccountLoginHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.Request) (int, error) {
-	decoder := json.NewDecoder(r.Body)
-
-	var loginInformation accountLogin
-	err := decoder.Decode(&loginInformation)
-	if err != nil {
-		return http.StatusBadRequest, accountLoginFail("Internal server error: Server could not parse message", err, &w)
-	}
-	defer r.Body.Close()
-
-	success, errorMessage, accessToken, err := auth.Login(ctx.SSos, ctx.Database, loginInformation.AuthProvider, loginInformation.Code, r.RemoteAddr)
-
-	if err != nil {
-		return http.StatusInternalServerError, accountLoginFail("Internal server error: "+errorMessage, err, &w)
-	}
-
-	status := accountLoginStatus{
-		Success:      success,
-		ErrorMessage: errorMessage,
-		AccessToken:  accessToken,
-	}
-	data, err := json.MarshalIndent(status, "", "\t")
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-
-	// Send the JSON object back to the user
-	w.Header().Add("content-type", "application/json")
-	w.Write(data)
-	return http.StatusOK, nil
-}
-
-// AccountInfoHandler displays the account information for a given Session Key
+// AccountInfoHandler displays the account information for a given access token
 func AccountInfoHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.Request) (int, error) {
 	decoder := json.NewDecoder(r.Body)
 

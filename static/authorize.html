@@ -1,0 +1,42 @@
+<!DOCTYPE HTML>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>Pebble Authentication</title>
+    </head>
+
+    <body>
+      <form method="GET" action="{{google_authorization_endpoint}}">
+        <input type="hidden" name="client_id" value="{{google_client_id}}" />
+        <input type="hidden" name="redirect_uri" value="{{google_redirect_uri}}" />
+        <input type="hidden" name="response_type" value="code" />
+        <input type="hidden" name="access_type" value="offline" />
+        <input type="hidden" name="scope" value="{{google_scopes}}" />
+        <input type="hidden" name="nonce" value="{{nonce}}" />
+        <input type="hidden" name="state" value="{{state}}" />
+        <button type="submit">Connect using your Google account</button>
+      </form>
+
+      <form method="GET" action="{{yahoo_authorization_endpoint}}">
+        <input type="hidden" name="client_id" value="{{yahoo_client_id}}" />
+        <input type="hidden" name="redirect_uri" value="{{yahoo_redirect_uri}}" />
+        <input type="hidden" name="response_type" value="code" />
+        <input type="hidden" name="access_type" value="offline" />
+        <input type="hidden" name="scope" value="{{yahoo_scopes}}" />
+        <input type="hidden" name="nonce" value="{{nonce}}" />
+        <input type="hidden" name="state" value="{{state}}" />
+        <button type="submit">Connect using your Yahoo account</button>
+      </form>
+
+      <form method="GET" action="{{auth0_authorization_endpoint}}">
+        <input type="hidden" name="client_id" value="{{auth0_client_id}}" />
+        <input type="hidden" name="redirect_uri" value="{{auth0_redirect_uri}}" />
+        <input type="hidden" name="response_type" value="code" />
+        <input type="hidden" name="access_type" value="offline" />
+        <input type="hidden" name="scope" value="{{auth0_scopes}}" />
+        <input type="hidden" name="nonce" value="{{nonce}}" />
+        <input type="hidden" name="state" value="{{state}}" />
+        <button type="submit">Connect using your Auth0 account</button>
+      </form>
+    </body>
+</html>

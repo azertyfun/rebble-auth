@@ -1,15 +1,16 @@
 package db
 
 import (
-	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
-	"math/big"
+	"log"
 	"strings"
 	"time"
 
 	"github.com/nu7hatch/gouuid"
+
+	"pebble-dev/rebble-auth/common"
 )
 
 // Handler contains reference to the database client
@@ -17,63 +18,69 @@ type Handler struct {
 	*sql.DB
 }
 
-// generateAccessToken() generates a pseudo-random fixed-length string
-func generateAccessToken() string {
-	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_"
+func createSession(tx *sql.Tx, provider string, sub string, userId string, ssoAccessToken string, ssoRefreshToken string, expires int64) (string, string, error) {
+	accessToken := common.GenerateString(50)
+	refreshToken := common.GenerateString(50)
 
-	b := make([]byte, 50)
-	for i := range b {
-		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
-		if err != nil {
-			panic(fmt.Errorf("Could not generate random number: %v", err))
-		}
-		b[i] = letters[n.Int64()]
+	_, err := tx.Exec("INSERT INTO userSessions(userId, accessToken, refreshToken, expires) VALUES (?, ?, ?, ?)", userId, accessToken, refreshToken, time.Now().Add(time.Hour).Unix())
+	if err != nil {
+		return "", "", err
 	}
 
-	return string(b)
+	count := 0
+	row := tx.QueryRow("SELECT COUNT(*) FROM providerSessions WHERE provider=? AND sub=?", provider, sub)
+	err = row.Scan(&count)
+	if err != nil {
+		return "", "", err
+	}
+
+	// This can happen when the user has already logged in once, but also when the login page has been modified with "access_type=online".
+	if ssoRefreshToken == "" {
+		if count == 0 {
+			return "", "", errors.New("Cannot create provider session without a refresh token")
+		} else if count == 1 {
+			_, err = tx.Exec("UPDATE providerSessions SET accessToken=?, expires=? WHERE provider=? AND sub=?", ssoAccessToken, expires, provider, sub)
+			if err != nil {
+				return "", "", err
+			}
+		} else {
+			return "", "", errors.New("Found multiple instances of provider session for one user")
+		}
+	} else {
+		if count == 0 {
+			_, err = tx.Exec("INSERT INTO providerSessions(userId, provider, sub, accessToken, refreshToken, expires) VALUES (?, ?, ?, ?, ?, ?)", userId, provider, sub, ssoAccessToken, ssoRefreshToken, expires)
+			if err != nil {
+				return "", "", err
+			}
+		} else if count == 1 {
+			_, err = tx.Exec("UPDATE providerSessions SET accessToken=?, refreshToken=?, expires=? WHERE provider=? AND sub=?", ssoAccessToken, ssoRefreshToken, expires, provider, sub)
+			if err != nil {
+				return "", "", err
+			}
+		} else {
+			return "", "", errors.New("Found multiple instances of provider session for one user")
+		}
+	}
+
+	return accessToken, refreshToken, nil
 }
 
-func createSession(tx *sql.Tx, userId string, ssoAccessToken string, expires int64) (string, error) {
-	accessToken := generateAccessToken()
-
-	// We check that we have no more than 5 active sessions at a time (for security reasons). Otherwise, we delete the oldest one.
-	var count int
-	row := tx.QueryRow("SELECT count(*) FROM userSessions WHERE userId=?", userId)
-	err := row.Scan(&count)
-	if err != nil {
-		return "", err
-	}
-
-	if count >= 5 {
-		_, err = tx.Exec("DELETE FROM userSessions WHERE accessToken=(SELECT accessToken FROM userSessions WHERE userId=? ORDER BY expires ASC LIMIT 1)", userId)
-		if err != nil {
-			return "", err
-		}
-	}
-
-	_, err = tx.Exec("INSERT INTO userSessions(accessToken, ssoAccessToken, userId, expires) VALUES (?, ?, ?, ?)", accessToken, ssoAccessToken, userId, expires)
-	if err != nil {
-		return "", err
-	}
-
-	return accessToken, nil
-}
-
-// AccountLoginOrRegister attempts to login (or, if the user doesn't yet exist, create a user account), and returns a user friendly error as well as an actual error (as not to display SQL statements to the user for example).
-func (handler Handler) AccountLoginOrRegister(provider string, sub string, name string, ssoAccessToken string, expires int64, remoteIp string) (string, string, error) {
+// AccountLoginOrRegister attempts to login (or, if the user doesn't yet exist, create a user account)
+// Returns accessToken, refreshToken, errorMessage, error
+func (handler Handler) AccountLoginOrRegister(provider string, sub string, name string, ssoAccessToken string, ssoRefreshToken string, expires int64, remoteIp string) (string, string, string, error) {
 	tx, err := handler.DB.Begin()
 	if err != nil {
-		return "", "Internal server error", err
+		return "", "", "Internal server error", err
 	}
 	defer tx.Rollback()
 
-	row := tx.QueryRow("SELECT id, disabled FROM users WHERE provider=? AND sub=?", provider, sub)
+	row := tx.QueryRow("SELECT users.id, users.disabled FROM providerSessions JOIN users ON users.id = providerSessions.userId WHERE providerSessions.provider=? AND providerSessions.sub=?", provider, sub)
 
 	var userId string
 	disabled := false
 	err = row.Scan(&userId, &disabled)
 	if err != nil && err != sql.ErrNoRows {
-		return "", "Internal server error", err
+		return "", "", "Internal server error", err
 	}
 
 	if err != nil {
@@ -82,7 +89,7 @@ func (handler Handler) AccountLoginOrRegister(provider string, sub string, name 
 		for {
 			id, err := uuid.NewV4()
 			if err != nil {
-				return "", "Internal server error", err
+				return "", "", "Internal server error", err
 			}
 			userId = strings.Replace(id.String(), "-", "", -1)
 
@@ -91,38 +98,42 @@ func (handler Handler) AccountLoginOrRegister(provider string, sub string, name 
 				if err == sql.ErrNoRows {
 					break
 				} else {
-					return "", "Internal server error", err
+					return "", "", "Internal server error", err
 				}
 			}
 		}
 
+		if name == "" {
+			name = userId
+		}
+
 		// Create user
-		_, err := tx.Exec("INSERT INTO users(id, provider, sub, name, pebbleMirror, disabled) VALUES (?, ?, ?, ?, 0, 0)", userId, provider, sub, name)
+		_, err := tx.Exec("INSERT INTO users(id, name, type, pebbleMirror, disabled) VALUES (?, ?, 'user', 0, 0)", userId, name)
 		if err != nil {
-			return "", "Internal server error", err
+			return "", "", "Internal server error", err
 		}
 	}
 
 	if disabled {
-		return "", "Account is disabled", errors.New("cannot login; account is disabled")
+		return "", "", "Account is disabled", errors.New("cannot login; account is disabled")
 	}
 
 	// Create user session
 
-	accessToken, err := createSession(tx, userId, ssoAccessToken, expires)
+	accessToken, refreshToken, err := createSession(tx, provider, sub, userId, ssoAccessToken, ssoRefreshToken, expires)
 	if err != nil {
-		return "", "Internal server error", err
+		return "", "", "Internal server error", err
 	}
 
 	// Log successful login attempt
 	_, err = tx.Exec("INSERT INTO userLoginLog(userId, remoteIp, time, success) VALUES (?, ?, ?, 1)", userId, remoteIp, time.Now().UnixNano())
 	if err != nil {
-		return "", "Internal server error", err
+		return "", "", "Internal server error", err
 	}
 
 	tx.Commit()
 
-	return accessToken, "", nil
+	return accessToken, refreshToken, "", nil
 }
 
 // AccountExists checks if an account exists
@@ -163,15 +174,15 @@ func (handler Handler) AccountInformation(accessToken string) (bool, string, err
 		return false, "", err
 	}
 
-	var name, provider, sub string
-	row := handler.DB.QueryRow("SELECT name, provider, sub FROM users WHERE id=?", userId)
-	err = row.Scan(&name, &provider, &sub)
+	var name string
+	row := handler.DB.QueryRow("SELECT name FROM users WHERE id=?", userId)
+	err = row.Scan(&name)
 	if err != nil {
 		return false, "", err
 	}
 
 	if name == "" {
-		return true, provider + "_" + sub, nil
+		return true, userId, nil
 	}
 
 	return true, name, nil
@@ -188,10 +199,9 @@ func (handler Handler) SessionInformation(accessToken string) (bool, string, err
 		return false, "Internal server error", err
 	}
 
-	var ssoAccessToken string
+	var disabled bool
 	var expires int64
-	var provider string
-	rows, err := handler.DB.Query("SELECT userSessions.ssoAccessToken, userSessions.expires, users.provider FROM userSessions JOIN users ON users.id = userSessions.userId WHERE users.id=?", userId)
+	rows, err := handler.DB.Query("SELECT users.disabled, userSessions.expires FROM userSessions JOIN users ON users.id = userSessions.userId WHERE users.id=? AND userSessions.accessToken=?", userId, accessToken)
 	if err != nil {
 		return false, "Internal server error", err
 	}
@@ -199,12 +209,13 @@ func (handler Handler) SessionInformation(accessToken string) (bool, string, err
 	sessionExpired := false
 	for rows.Next() {
 		sessionFound = true
-		err = rows.Scan(&ssoAccessToken, &expires, &provider)
+		err = rows.Scan(&disabled, &expires)
 		if err != nil {
 			return false, "Internal server error", err
 		}
 
 		if time.Now().Unix() > expires {
+			log.Printf("Session expired! (%v > %v)", time.Now().Unix(), expires)
 			sessionExpired = true
 			continue
 		}
@@ -226,6 +237,15 @@ func (handler Handler) UpdateName(accessToken string, name string) (string, erro
 		}
 
 		return "Internal server error", err
+	}
+
+	loggedIn, errorMessage, err := handler.SessionInformation(accessToken)
+	if !loggedIn {
+		if err != nil {
+			return fmt.Sprintf("Internal Server Error: %v", errorMessage), err
+		}
+
+		return errorMessage, nil
 	}
 
 	tx, err := handler.DB.Begin()

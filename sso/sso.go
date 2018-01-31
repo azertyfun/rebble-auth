@@ -14,6 +14,7 @@ type Sso struct {
 	ClientSecret string `json:"client_secret"`
 	DiscoverURI  string `json:"discover_uri"`
 	RedirectURI  string `json:"redirect_uri"`
+	Scopes       string `json:"scopes"`
 
 	Discovery Discovery
 	Certs     Certs
@@ -23,9 +24,10 @@ type Sso struct {
 // https://developers.google.com/identity/protocols/OpenIDConnect#discovery
 // Only the relevant fields will be filled
 type Discovery struct {
-	TokenEndpoint    string `json:"token_endpoint"`
-	UserinfoEndpoint string `json:"userinfo_endpoint"`
-	JwksURI          string `json:"jwks_uri"`
+	AuthorizationEndpoint string `json:"authorization_endpoint"`
+	TokenEndpoint         string `json:"token_endpoint"`
+	UserinfoEndpoint      string `json:"userinfo_endpoint"`
+	JwksURI               string `json:"jwks_uri"`
 }
 
 type Key struct {
