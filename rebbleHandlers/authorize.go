@@ -151,14 +151,14 @@ func AuthorizeCallbackHandler(ctx *HandlerContext, w http.ResponseWriter, r *htt
 		return http.StatusFound, authorizationFail(fmt.Sprintf("Invalid state: expected %v, got %v", stateCookie.Value, state), redirectURI, nil, &w, r)
 	}
 
-	success, errorMessage, accessToken, refreshToken, err := auth.Login(ctx.SSos, ctx.Database, sso.Name, code, r.RemoteAddr)
+	success, errorMessage, accessToken, err := auth.Login(ctx.SSos, ctx.Database, sso.Name, code, r.RemoteAddr)
 
 	if err != nil {
 		log.Println(err)
 	}
 
 	if success {
-		http.Redirect(w, r, redirectURI+"?access_token="+accessToken+"&refresh_token="+refreshToken+"&state="+rebbleState, http.StatusFound)
+		http.Redirect(w, r, redirectURI+"?access_token="+accessToken+"&state="+rebbleState, http.StatusFound)
 	} else {
 		http.Redirect(w, r, redirectURI+"?error="+errorMessage, http.StatusFound)
 	}

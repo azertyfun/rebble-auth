@@ -24,9 +24,9 @@ type tokensStatus struct {
 }
 
 // Login attempts to log a user in given an auth provider and a corresponding code
-// Returns success, errorMessage, accessToken, refreshToken, err
+// Returns success, errorMessage, accessToken, err
 // err is only returned if the error was unexpected (internal server error vs bad request)
-func Login(ssos []sso.Sso, database *db.Handler, authProvider string, code string, remoteAddr string) (bool, string, string, string, error) {
+func Login(ssos []sso.Sso, database *db.Handler, authProvider string, code string, remoteAddr string) (bool, string, string, error) {
 	var sso sso.Sso
 	foundSso := false
 	for _, s := range ssos {
@@ -37,7 +37,7 @@ func Login(ssos []sso.Sso, database *db.Handler, authProvider string, code strin
 	}
 
 	if !foundSso {
-		return false, "Invalid SSO provider", "", "", nil
+		return false, "Invalid SSO provider", "", nil
 	}
 
 	v := url.Values{}
@@ -48,24 +48,24 @@ func Login(ssos []sso.Sso, database *db.Handler, authProvider string, code strin
 	v.Add("grant_type", "authorization_code")
 	resp, err := http.Post(sso.Discovery.TokenEndpoint, "application/x-www-form-urlencoded", strings.NewReader(v.Encode()))
 	if err != nil {
-		return false, "Internal server error: Could not exchange tokens", "", "", err
+		return false, "Internal server error: Could not exchange tokens", "", err
 	}
 
 	decoder := json.NewDecoder(resp.Body)
 	var tokensStatus tokensStatus
 	err = decoder.Decode(&tokensStatus)
 	if err != nil {
-		return false, "Internal server error: Could not decode token information", "", "", err
+		return false, "Internal server error: Could not decode token information", "", err
 	}
 	defer resp.Body.Close()
 
 	if tokensStatus.Error != "" {
-		return false, "Internal server error: Could not exchange tokens", "", "", fmt.Errorf("Could not exchange tokens: %v (%v)", tokensStatus.Error, tokensStatus.ErrorDescription)
+		return false, "Internal server error: Could not exchange tokens", "", fmt.Errorf("Could not exchange tokens: %v (%v)", tokensStatus.Error, tokensStatus.ErrorDescription)
 	}
 
 	claims, err := rebbleJwt.ParseJwtToken(sso, tokensStatus.IdToken)
 	if err != nil {
-		return false, "Internal server error: Could not decode token information", "", "", err
+		return false, "Internal server error: Could not decode token information", "", err
 	}
 
 	var name string
@@ -73,10 +73,10 @@ func Login(ssos []sso.Sso, database *db.Handler, authProvider string, code strin
 		name = n.(string)
 	}
 
-	accessToken, refreshToken, userErr, err := database.AccountLoginOrRegister(sso.Name, claims["sub"].(string), name, tokensStatus.AccessToken, tokensStatus.RefreshToken, int64(claims["exp"].(float64)), remoteAddr)
+	accessToken, userErr, err := database.AccountLoginOrRegister(sso.Name, claims["sub"].(string), name, tokensStatus.AccessToken, tokensStatus.RefreshToken, int64(claims["exp"].(float64)), remoteAddr)
 	if err != nil {
-		return false, userErr, "", "", err
+		return false, userErr, "", err
 	}
 
-	return true, userErr, accessToken, refreshToken, nil
+	return true, userErr, accessToken, nil
 }

@@ -73,9 +73,7 @@ func AdminRebuildDBHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.R
 			create table userSessions (
 				id integer not null primary key,
 				userId text not null,
-				accessToken text not null,
-				refreshToken text not null,
-				expires integer not null
+				accessToken text not null
 			);
 			delete from userSessions;
 
