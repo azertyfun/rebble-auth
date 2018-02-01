@@ -40,6 +40,10 @@ Shows an HTML page containing links to the supported Identity Provider, as shown
 
 The query parameters `error={error message}` or `access_token={access_token}` will be appended to the `redirect_uri`.
 
+### `/authorize?redirect_uri={redirect_uri}&addProvider&access_token={access_token}`
+
+Shows the same `/authorize` HTML page, but the provider will be added to the already existing account which holds `access_token`.
+
 ### `/authorize_callback/{provider}`
 
 Is called back by the identity provider `{provider}`. It will always redirect to the provided `redirect_uri`, unless the URI was lost somehow, in which case an error message will be displayed to the user.

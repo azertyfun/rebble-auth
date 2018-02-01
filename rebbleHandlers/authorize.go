@@ -48,6 +48,31 @@ func AuthorizeHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.Reques
 		rebbleState = s[0]
 	}
 
+	accessToken := ""
+	if t, ok := urlquery["access_token"]; ok {
+		if len(t) > 1 {
+			fmt.Fprintln(w, "Too many values for access_token query parameter")
+			return http.StatusBadRequest, nil
+		} else if len(t) == 1 {
+			accessToken = t[0]
+		}
+	}
+
+	addProvider := false
+	if n, ok := urlquery["addProvider"]; ok {
+		if len(n) > 1 {
+			fmt.Fprintln(w, "Too many values for addProvider query parameter")
+			return http.StatusBadRequest, nil
+		} else if len(n) == 1 {
+			addProvider = true
+		}
+	}
+
+	if (accessToken != "" || addProvider) && !(accessToken != "" && addProvider) {
+		fmt.Println(w, "Can't have `access_token` without `addProvider` query parameters")
+		return http.StatusBadRequest, nil
+	}
+
 	data, err := ioutil.ReadFile("static/authorize.html")
 	if err != nil {
 		return http.StatusInternalServerError, err
@@ -59,6 +84,10 @@ func AuthorizeHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.Reques
 	// We want the callback to know what the redirect URI is, as well as the rebble `state` parameter. So, we encode the state to contain a random indentifier (to prevent cross-site forgery), a delimiter (|), the base-64 encoded callback URI, another delimiter, and the rebble state
 	// The base64 encoding makes it safe to be used as a URL query parameter
 	state += "|" + base64.URLEncoding.EncodeToString([]byte(callback)) + "|" + base64.URLEncoding.EncodeToString([]byte(rebbleState))
+
+	if accessToken != "" && addProvider {
+		state += "|" + accessToken
+	}
 
 	http.SetCookie(w, &http.Cookie{
 		Name:    "state",
@@ -98,9 +127,14 @@ func AuthorizeCallbackHandler(ctx *HandlerContext, w http.ResponseWriter, r *htt
 	}
 
 	state2 := strings.Split(state, "|")
-	if len(state2) != 3 {
+	if len(state2) < 3 || len(state2) > 4 {
 		fmt.Fprintf(w, "Invalid state: %v", state)
 		return http.StatusBadRequest, nil
+	}
+	addProvider := len(state2) == 4
+	rebbleAccessToken := ""
+	if addProvider {
+		rebbleAccessToken = state2[3]
 	}
 
 	redirectURIb, err := base64.URLEncoding.DecodeString(state2[1])
@@ -151,16 +185,30 @@ func AuthorizeCallbackHandler(ctx *HandlerContext, w http.ResponseWriter, r *htt
 		return http.StatusFound, authorizationFail(fmt.Sprintf("Invalid state: expected %v, got %v", stateCookie.Value, state), redirectURI, nil, &w, r)
 	}
 
-	success, errorMessage, accessToken, err := auth.Login(ctx.SSos, ctx.Database, sso.Name, code, r.RemoteAddr)
+	if addProvider {
+		success, errorMessage, err := auth.AddProvider(ctx.SSos, ctx.Database, sso.Name, code, rebbleAccessToken, r.RemoteAddr)
 
-	if err != nil {
-		log.Println(err)
-	}
+		if err != nil {
+			log.Println(err)
+		}
 
-	if success {
-		http.Redirect(w, r, redirectURI+"?access_token="+accessToken+"&state="+rebbleState, http.StatusFound)
+		if success {
+			http.Redirect(w, r, redirectURI+"?success", http.StatusFound)
+		} else {
+			http.Redirect(w, r, redirectURI+"?error="+errorMessage, http.StatusFound)
+		}
 	} else {
-		http.Redirect(w, r, redirectURI+"?error="+errorMessage, http.StatusFound)
+		success, errorMessage, accessToken, err := auth.Login(ctx.SSos, ctx.Database, sso.Name, code, r.RemoteAddr)
+
+		if err != nil {
+			log.Println(err)
+		}
+
+		if success {
+			http.Redirect(w, r, redirectURI+"?access_token="+accessToken+"&state="+rebbleState, http.StatusFound)
+		} else {
+			http.Redirect(w, r, redirectURI+"?error="+errorMessage, http.StatusFound)
+		}
 	}
 
 	return http.StatusFound, nil

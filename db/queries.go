@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -17,6 +18,45 @@ type Handler struct {
 	*sql.DB
 }
 
+func addProvider(tx *sql.Tx, provider string, sub string, userId string, ssoAccessToken string, ssoRefreshToken string, expires int64) error {
+	count := 0
+	row := tx.QueryRow("SELECT COUNT(*) FROM providerSessions WHERE provider=? AND sub=?", provider, sub)
+	err := row.Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	// This can happen when the user has already logged in once, but also when the login page has been modified with "access_type=online".
+	if ssoRefreshToken == "" {
+		if count == 0 {
+			return errors.New("Cannot create provider session without a refresh token")
+		} else if count == 1 {
+			_, err = tx.Exec("UPDATE providerSessions SET accessToken=?, expires=? WHERE provider=? AND sub=?", ssoAccessToken, expires, provider, sub)
+			if err != nil {
+				return err
+			}
+		} else {
+			return errors.New("Found multiple instances of provider session for one user")
+		}
+	} else {
+		if count == 0 {
+			_, err = tx.Exec("INSERT INTO providerSessions(userId, provider, sub, accessToken, refreshToken, expires) VALUES (?, ?, ?, ?, ?, ?)", userId, provider, sub, ssoAccessToken, ssoRefreshToken, expires)
+			if err != nil {
+				return err
+			}
+		} else if count == 1 {
+			_, err = tx.Exec("UPDATE providerSessions SET accessToken=?, refreshToken=?, expires=? WHERE provider=? AND sub=?", ssoAccessToken, ssoRefreshToken, expires, provider, sub)
+			if err != nil {
+				return err
+			}
+		} else {
+			return errors.New("Found multiple instances of provider session for one user")
+		}
+	}
+
+	return nil
+}
+
 func createSession(tx *sql.Tx, provider string, sub string, userId string, ssoAccessToken string, ssoRefreshToken string, expires int64) (string, error) {
 	accessToken := common.GenerateString(50)
 
@@ -25,39 +65,9 @@ func createSession(tx *sql.Tx, provider string, sub string, userId string, ssoAc
 		return "", err
 	}
 
-	count := 0
-	row := tx.QueryRow("SELECT COUNT(*) FROM providerSessions WHERE provider=? AND sub=?", provider, sub)
-	err = row.Scan(&count)
+	err = addProvider(tx, provider, sub, userId, ssoAccessToken, ssoRefreshToken, expires)
 	if err != nil {
 		return "", err
-	}
-
-	// This can happen when the user has already logged in once, but also when the login page has been modified with "access_type=online".
-	if ssoRefreshToken == "" {
-		if count == 0 {
-			return "", errors.New("Cannot create provider session without a refresh token")
-		} else if count == 1 {
-			_, err = tx.Exec("UPDATE providerSessions SET accessToken=?, expires=? WHERE provider=? AND sub=?", ssoAccessToken, expires, provider, sub)
-			if err != nil {
-				return "", err
-			}
-		} else {
-			return "", errors.New("Found multiple instances of provider session for one user")
-		}
-	} else {
-		if count == 0 {
-			_, err = tx.Exec("INSERT INTO providerSessions(userId, provider, sub, accessToken, refreshToken, expires) VALUES (?, ?, ?, ?, ?, ?)", userId, provider, sub, ssoAccessToken, ssoRefreshToken, expires)
-			if err != nil {
-				return "", err
-			}
-		} else if count == 1 {
-			_, err = tx.Exec("UPDATE providerSessions SET accessToken=?, refreshToken=?, expires=? WHERE provider=? AND sub=?", ssoAccessToken, ssoRefreshToken, expires, provider, sub)
-			if err != nil {
-				return "", err
-			}
-		} else {
-			return "", errors.New("Found multiple instances of provider session for one user")
-		}
 	}
 
 	return accessToken, nil
@@ -132,6 +142,49 @@ func (handler Handler) AccountLoginOrRegister(provider string, sub string, name 
 	tx.Commit()
 
 	return accessToken, "", nil
+}
+
+// AccountAddProvider attempts to add a provider to a user's account
+// Returns errorMessage, error
+func (handler Handler) AccountAddProvider(provider string, sub string, rebbleAccessToken string, ssoAccessToken string, ssoRefreshToken string, expires int64, remoteIp string) (string, error) {
+	tx, err := handler.DB.Begin()
+	if err != nil {
+		return "Internal server error", err
+	}
+	defer tx.Rollback()
+
+	loggedIn, _, err := handler.AccountInformation(rebbleAccessToken)
+	if !loggedIn {
+		return "Invalid access token", err
+	}
+
+	row := tx.QueryRow("SELECT users.id, users.disabled FROM userSessions JOIN users ON users.id = userSessions.userId WHERE accessToken=?", rebbleAccessToken)
+
+	var userId string
+	disabled := false
+	err = row.Scan(&userId, &disabled)
+	if err != nil && err != sql.ErrNoRows {
+		if err == sql.ErrNoRows {
+			return "User doesn't exist", nil
+		}
+
+		return "Internal server error", err
+	}
+
+	log.Println("userId", userId)
+
+	if disabled {
+		return "Account is disabled", errors.New("cannot login; account is disabled")
+	}
+
+	err = addProvider(tx, provider, sub, userId, ssoAccessToken, ssoRefreshToken, expires)
+	if err != nil {
+		return "Internal server error", err
+	}
+
+	tx.Commit()
+
+	return "", nil
 }
 
 // AccountExists checks if an account exists
