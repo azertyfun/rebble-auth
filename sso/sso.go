@@ -47,20 +47,6 @@ type Certs struct {
 	Keys []Key `json:"keys"`
 }
 
-type facebookAppTokenStatus struct {
-	AccessToken string `json:"access_token"`
-	TokenType   string `json:"token_type"`
-
-	Error facebookError `json:"error"`
-}
-
-type facebookError struct {
-	Message string `json:"message"`
-	Type    string `json:"type"`
-	Code    int    `json:"code"`
-	Trace   string `json:"fbtrace_id"`
-}
-
 func (key *Key) GetPublicKey() (rsa.PublicKey, error) {
 	// Pad the base64 data if necessary
 	if len(key.N)%4 != 0 {
