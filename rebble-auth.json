@@ -38,7 +38,28 @@
             "client_secret": "<client secret>",
             "type": "facebook",
             "scopes": "email",
-            "redirect_uri": "http://localhost:8082/authorize_callback/facebook"
+            "redirect_uri": "http://localhost:8082/authorize_callback/facebook",
+
+            "discovery": {
+                "authorization_endpoint": "https://www.facebook.com/v2.12/dialog/oauth",
+		        "token_endpoint": "https://graph.facebook.com/v2.12/oauth/access_token",
+		        "userinfo_endpoint": "https://graph.facebook.com/me"
+            }
+        },
+        {
+            "name": "fitbit",
+            "client_id": "<client ID>",
+            "client_secret": "<client secret>",
+            "type": "fitbit",
+            "scopes": "profile",
+            "redirect_uri": "http://localhost:8082/authorize_callback/fitbit",
+
+            "discovery": {
+                "authorization_endpoint": "https://www.fitbit.com/oauth2/authorize",
+		        "token_endpoint": "https://api.fitbit.com/oauth2/token",
+		        "userinfo_endpoint": "https://api.fitbit.com/1/user/-/profile.json",
+		        "tokeninfo_endpoint": "https://api.fitbit.com/oauth2/introspect"
+            }
         }
     ],
     "database": "./rebble-auth.db"

@@ -49,15 +49,28 @@ func decode(resp *http.Response, err error, out interface{}) error {
 }
 
 // Post POSTs url-encoded values and saves the output to the corresponding json
-func Post(uri string, values *url.Values, out interface{}) error {
-	resp, err := http.Post(uri, "application/x-www-form-urlencoded", strings.NewReader(values.Encode()))
+// authorization is optional, is used for APIs that use the Authorization header instead of a `clientSecret` query parameter
+func Post(uri string, values *url.Values, authorization string, out interface{}) error {
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", uri, strings.NewReader(values.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if authorization != "" {
+		req.Header.Set("Authorization", authorization)
+	}
+	resp, err := client.Do(req)
 
 	return decode(resp, err, out)
 }
 
 // Get GETs url-encoded values and saves the output to the corresponding json
-func Get(uri string, values *url.Values, out interface{}) error {
-	resp, err := http.Get(uri + "?" + values.Encode())
+// authorization is optional, is used for APIs that use the Authorization header instead of a `clientSecret` query parameter
+func Get(uri string, values *url.Values, authorization string, out interface{}) error {
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", uri+"?"+values.Encode(), nil)
+	if authorization != "" {
+		req.Header.Set("Authorization", authorization)
+	}
+	resp, err := client.Do(req)
 
 	return decode(resp, err, out)
 }

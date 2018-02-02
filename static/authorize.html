@@ -49,5 +49,16 @@
         <input type="hidden" name="state" value="{{state}}" />
         <button type="submit">Connect using your Facebook account</button>
       </form>
+
+      <form method="GET" action="{{fitbit_authorization_endpoint}}">
+        <input type="hidden" name="client_id" value="{{fitbit_client_id}}" />
+        <input type="hidden" name="redirect_uri" value="{{fitbit_redirect_uri}}" />
+        <input type="hidden" name="response_type" value="code" />
+        <input type="hidden" name="access_type" value="offline" />
+        <input type="hidden" name="scope" value="{{fitbit_scopes}}" />
+        <input type="hidden" name="nonce" value="{{nonce}}" />
+        <input type="hidden" name="state" value="{{state}}" />
+        <button type="submit">Connect using your Fitbit account</button>
+      </form>
     </body>
 </html>

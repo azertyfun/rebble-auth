@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/url"
 	"pebble-dev/rebble-auth/common"
@@ -47,6 +49,40 @@ type facebookError struct {
 	Trace   string `json:"fbtrace_id"`
 }
 
+type fitbitTokensStatus struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int    `json:"expires_in"`
+
+	Success bool          `json:"success"`
+	Errors  []fitbitError `json:"errors"`
+}
+
+type fitbitTokenInformation struct {
+	Active int            `json:"active"`
+	UserID fitbitClientID `json:"userId"`
+	Exp    int64          `json:"exp"`
+}
+
+type fitbitClientID struct {
+	ID string `json:"id"`
+}
+
+type fitbitUserInformation struct {
+	User fitbitUser `json:"user"`
+
+	Errors []fitbitError `json:"error"`
+}
+
+type fitbitUser struct {
+	DisplayName string `json:"displayName"`
+}
+
+type fitbitError struct {
+	Type    string `json:"errorType`
+	Message string `json:"message"`
+}
+
 func exchangeTokens(sso sso.Sso, code string) (bool, string, tokensStatus, jwt.MapClaims, error) {
 	switch sso.Type {
 	case "oidc":
@@ -57,7 +93,7 @@ func exchangeTokens(sso sso.Sso, code string) (bool, string, tokensStatus, jwt.M
 		v.Add("redirect_uri", sso.RedirectURI)
 		v.Add("grant_type", "authorization_code")
 		var status tokensStatus
-		err := common.Post(sso.Discovery.TokenEndpoint, &v, &status)
+		err := common.Post(sso.Discovery.TokenEndpoint, &v, "", &status)
 		if err != nil {
 			return false, fmt.Sprintf("Internal server error: Could not exchange tokens: %v", err), tokensStatus{}, nil, err
 		}
@@ -80,7 +116,7 @@ func exchangeTokens(sso sso.Sso, code string) (bool, string, tokensStatus, jwt.M
 		v.Add("redirect_uri", sso.RedirectURI)
 
 		var status facebookTokensStatus
-		err := common.Post(sso.Discovery.TokenEndpoint, &v, &status)
+		err := common.Post(sso.Discovery.TokenEndpoint, &v, "", &status)
 		if err != nil {
 			return false, fmt.Sprintf("Internal server error: Could not exchange tokens: %v", err), tokensStatus{}, nil, err
 		}
@@ -88,12 +124,12 @@ func exchangeTokens(sso sso.Sso, code string) (bool, string, tokensStatus, jwt.M
 			return false, "Internal server error: Could not exchange tokens", tokensStatus{}, nil, fmt.Errorf("Could not exchange tokens: %v (%v %v)", status.Error.Message, status.Error.Type, status.Error.Code)
 		}
 
-		// Get token information using app token
+		// Get token information
 		v = url.Values{}
 		v.Add("access_token", status.AccessToken)
 		v.Add("fields", "id,name")
 		var info facebookTokenInformation
-		err = common.Get(sso.Discovery.UserinfoEndpoint, &v, &info)
+		err = common.Get(sso.Discovery.UserinfoEndpoint, &v, "", &info)
 		if err != nil {
 			return false, fmt.Sprintf("Internal server error: Could not get token information: %v", err), tokensStatus{}, nil, err
 		}
@@ -113,6 +149,63 @@ func exchangeTokens(sso sso.Sso, code string) (bool, string, tokensStatus, jwt.M
 			ExpiresIn:        status.ExpiresIn,
 			Error:            status.Error.Message,
 			ErrorDescription: status.Error.Message,
+		}, claims, nil
+
+	case "fitbit":
+		bearer := "Basic " + base64.URLEncoding.EncodeToString([]byte(sso.ClientID+":"+sso.ClientSecret))
+
+		v := url.Values{}
+		v.Add("code", code)
+		v.Add("clientId", sso.ClientID)
+		v.Add("redirect_uri", sso.RedirectURI)
+		v.Add("grant_type", "authorization_code")
+
+		var status fitbitTokensStatus
+		err := common.Post(sso.Discovery.TokenEndpoint, &v, bearer, &status)
+		if err != nil {
+			return false, fmt.Sprintf("Internal server error: Could not exchange tokens: %v", err), tokensStatus{}, nil, err
+		}
+		if len(status.Errors) != 0 {
+			return false, "Internal server error: Could not exchange tokens", tokensStatus{}, nil, fmt.Errorf("Could not exchange tokens: %v", status.Errors)
+		}
+
+		// Get token information
+		v = url.Values{}
+		v.Add("access_token", status.AccessToken)
+		v.Add("fields", "id,name")
+		var user fitbitUserInformation
+		err = common.Get(sso.Discovery.UserinfoEndpoint, &v, bearer, &user)
+		if err != nil {
+			return false, fmt.Sprintf("Internal server error: Could not get user information: %v", err), tokensStatus{}, nil, err
+		}
+		if len(user.Errors) != 0 {
+			return false, "Internal server error: Could not get user information", tokensStatus{}, nil, fmt.Errorf("Could not get user information: %v", user.Errors)
+		}
+
+		// Get user ID
+		v = url.Values{}
+		v.Add("token", status.AccessToken)
+		var info fitbitTokenInformation
+		err = common.Post(sso.Discovery.TokenInfoEndpoint, &v, bearer, &info)
+		if err != nil {
+			return false, fmt.Sprintf("Internal server error: Could not get token information: %v", err), tokensStatus{}, nil, err
+		}
+		if info.Active != 1 {
+			return false, fmt.Sprintf("Internal server error: Could not get token information: inactive"), tokensStatus{}, nil, errors.New("Token inactive")
+		}
+
+		claims := jwt.MapClaims{
+			"sub":  info.UserID.ID,
+			"exp":  float64(info.Exp / 1000),
+			"name": user.User.DisplayName,
+		}
+
+		return true, "", tokensStatus{
+			AccessToken:      status.AccessToken,
+			RefreshToken:     status.RefreshToken,
+			ExpiresIn:        status.ExpiresIn,
+			Error:            "",
+			ErrorDescription: "",
 		}, claims, nil
 	}
 	return false, fmt.Sprintf("Internal server error: Invalid SSO provider type %v", sso.Type), tokensStatus{}, nil, fmt.Errorf("Invalid SSO provider type %v", sso.Type)

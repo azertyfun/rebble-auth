@@ -20,7 +20,7 @@ type Sso struct {
 	RedirectURI  string `json:"redirect_uri"`
 	Scopes       string `json:"scopes"`
 
-	Discovery Discovery
+	Discovery Discovery `json:"discovery"`
 	Certs     Certs
 }
 
@@ -32,6 +32,8 @@ type Discovery struct {
 	TokenEndpoint         string `json:"token_endpoint"`
 	UserinfoEndpoint      string `json:"userinfo_endpoint"`
 	JwksURI               string `json:"jwks_uri"`
+
+	TokenInfoEndpoint string `json:"tokeninfo_endpoint"` // Not part of the OIDC answer, used by Fitbit API to get user ID
 }
 
 type Key struct {
@@ -109,10 +111,7 @@ func (sso Sso) Initialize() (Sso, error) {
 
 		break
 	case "facebook":
-		sso.Discovery.AuthorizationEndpoint = "https://www.facebook.com/v2.12/dialog/oauth"
-		sso.Discovery.TokenEndpoint = "https://graph.facebook.com/v2.12/oauth/access_token"
-		sso.Discovery.UserinfoEndpoint = "https://graph.facebook.com/me"
-
+	case "fitbit":
 		break
 	default:
 		return Sso{}, fmt.Errorf("Invalid SSO type '%v'", sso.Type)
