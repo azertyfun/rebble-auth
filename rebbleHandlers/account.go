@@ -23,6 +23,7 @@ type accountLoginStatus struct {
 type updateAccount struct {
 	AccessToken string `json:"accessToken"`
 	Name        string `json:"name"`
+	Provider    string `json:"provider"`
 }
 
 type updateAccountStatus struct {
@@ -40,9 +41,10 @@ type authInfo struct {
 }
 
 type accountInfo struct {
-	LoggedIn     bool   `json:"loggedIn"`
-	Name         string `json:"name"`
-	ErrorMessage string `json:"errorMessage"`
+	LoggedIn        bool     `json:"loggedIn"`
+	Name            string   `json:"name"`
+	LinkedProviders []string `json:"linkedProviders"`
+	ErrorMessage    string   `json:"errorMessage"`
 }
 
 // AccountInfoHandler displays the account information for a given access token
@@ -56,16 +58,17 @@ func AccountInfoHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.Requ
 	}
 	defer r.Body.Close()
 
-	loggedIn, errorMessage, name, err := auth.Info(ctx.Database, authInfo.AccessToken)
+	loggedIn, errorMessage, name, linkedProviders, err := auth.Info(ctx.Database, authInfo.AccessToken)
 
 	if err != nil {
 		log.Println(err)
 	}
 
 	info := accountInfo{
-		LoggedIn:     loggedIn,
-		Name:         name,
-		ErrorMessage: errorMessage,
+		LoggedIn:        loggedIn,
+		Name:            name,
+		LinkedProviders: linkedProviders,
+		ErrorMessage:    errorMessage,
 	}
 	data, err := json.MarshalIndent(info, "", "\t")
 	if err != nil {
@@ -120,6 +123,38 @@ func AccountGetNameHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.R
 
 	status := nameStatus{
 		Name:         name,
+		ErrorMessage: errorMessage,
+	}
+	data, err := json.MarshalIndent(status, "", "\t")
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	// Send the JSON object back to the user
+	w.Header().Add("content-type", "application/json")
+	w.Write(data)
+	return http.StatusOK, nil
+}
+
+// AccountRemoveLinkedProviderHandler removes a linked identity provider from a user account
+func AccountRemoveLinkedProviderHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.Request) (int, error) {
+	decoder := json.NewDecoder(r.Body)
+
+	var info updateAccount
+	err := decoder.Decode(&info)
+	if err != nil {
+		return http.StatusBadRequest, err
+	}
+	defer r.Body.Close()
+
+	success, errorMessage, err := auth.RemoveLinkedProvider(ctx.Database, info.AccessToken, info.Provider)
+
+	if err != nil {
+		log.Println(err)
+	}
+
+	status := updateAccountStatus{
+		Success:      success,
 		ErrorMessage: errorMessage,
 	}
 	data, err := json.MarshalIndent(status, "", "\t")

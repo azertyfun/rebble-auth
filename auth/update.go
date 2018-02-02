@@ -28,3 +28,24 @@ func UpdateName(database *db.Handler, accessToken string, name string) (bool, st
 
 	return true, errorMessage, err
 }
+
+// RemoveLinkedProvider removes a linked identity provider from a user's account
+// Returns success, errorMessage, err
+// err is only returned if the error was unexpected (internal server error vs bad request)
+func RemoveLinkedProvider(database *db.Handler, accessToken string, provider string) (bool, string, error) {
+	loggedIn, errorMessage, err := database.SessionInformation(accessToken)
+	if err != nil {
+		return false, "Internal server error: Could not query session information", err
+	}
+
+	if !loggedIn {
+		return false, "Not logged in", nil
+	}
+
+	errorMessage, err = database.AccountRemoveProvider(provider, accessToken)
+	if err != nil {
+		return false, "Internal server error: Could not remove provider", err
+	}
+
+	return true, errorMessage, err
+}

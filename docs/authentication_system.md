@@ -110,6 +110,26 @@ Response:
 }
 ```
 
+### `/user/update/removeLinkedProvider`
+
+Remove a linked provider from a user's account
+
+Query:
+```JSON
+{
+    "accessToken": "<access token>",
+    "provider": "<Provider>"
+}
+```
+
+Response:
+```JSON
+{
+	"success": boolean,
+	"errorMessage": "<error message>"
+}
+```
+
 ### `/user/name/{id}`
 
 Gets user `{id}`'s name

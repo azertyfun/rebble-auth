@@ -265,7 +265,7 @@ func AddProvider(ssos []sso.Sso, database *db.Handler, authProvider string, code
 	}
 
 	// This would normally be handled by the AccountAddProvider function, but we don't want to exchange tokens if we aren't going to store them
-	loggedIn, _, err := database.AccountInformation(rebbleAccessToken)
+	loggedIn, _, _, err := database.AccountInformation(rebbleAccessToken)
 	if !loggedIn {
 		return false, "Invalid access token", err
 	}

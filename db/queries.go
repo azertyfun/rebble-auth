@@ -138,7 +138,7 @@ func (handler Handler) AccountAddProvider(provider string, sub string, rebbleAcc
 	}
 	defer tx.Rollback()
 
-	loggedIn, _, err := handler.AccountInformation(rebbleAccessToken)
+	loggedIn, _, _, err := handler.AccountInformation(rebbleAccessToken)
 	if !loggedIn {
 		return "Invalid access token", err
 	}
@@ -164,6 +164,38 @@ func (handler Handler) AccountAddProvider(provider string, sub string, rebbleAcc
 	if err != nil {
 		return "Internal server error", err
 	}
+
+	tx.Commit()
+
+	return "", nil
+}
+
+// AccountRemoveProvider attempts to remove a provider from a user's account
+// Returns errorMessage, error
+func (handler Handler) AccountRemoveProvider(provider string, rebbleAccessToken string) (string, error) {
+	tx, err := handler.DB.Begin()
+	if err != nil {
+		return "Internal server error", err
+	}
+	defer tx.Rollback()
+
+	count := 0
+	row := tx.QueryRow("SELECT COUNT(*) FROM providerSessions WHERE userId = (SELECT userId FROM userSessions WHERE accessToken=?)", rebbleAccessToken)
+	err = row.Scan(&count)
+	if err != nil {
+		return "", err
+	}
+
+	if count == 1 {
+		return "Can't remove last identity provider!", errors.New("Can't remove last identity provider")
+	}
+
+	loggedIn, _, _, err := handler.AccountInformation(rebbleAccessToken)
+	if !loggedIn {
+		return "Invalid access token", err
+	}
+
+	_, err = tx.Exec("DELETE FROM providerSessions WHERE providerSessions.userId = (SELECT userId FROM userSessions WHERE accessToken=?) AND provider=?", rebbleAccessToken, provider)
 
 	tx.Commit()
 
@@ -198,28 +230,44 @@ func (handler Handler) getAccountId(accessToken string) (string, error) {
 }
 
 // AccountInformation returns information about the account associated to the given access token
-func (handler Handler) AccountInformation(accessToken string) (bool, string, error) {
+// returns success, name, providers, err
+func (handler Handler) AccountInformation(accessToken string) (bool, string, []string, error) {
 	userId, err := handler.getAccountId(accessToken)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return false, "", nil
+			return false, "", []string{}, nil
 		}
 
-		return false, "", err
+		return false, "", []string{}, err
 	}
 
 	var name string
 	row := handler.DB.QueryRow("SELECT name FROM users WHERE id=?", userId)
 	err = row.Scan(&name)
 	if err != nil {
-		return false, "", err
+		return false, "", []string{}, err
+	}
+
+	var linkedProviders []string
+	rows, err := handler.DB.Query("SELECT provider FROM providerSessions WHERE userid=?", userId)
+	if err != nil {
+		return false, "", []string{}, err
+	}
+
+	for rows.Next() {
+		provider := ""
+		err := rows.Scan(&provider)
+		if err != nil {
+			return false, "", []string{}, err
+		}
+		linkedProviders = append(linkedProviders, provider)
 	}
 
 	if name == "" {
-		return true, userId, nil
+		return true, userId, linkedProviders, nil
 	}
 
-	return true, name, nil
+	return true, name, linkedProviders, nil
 }
 
 // SessionInformation returns (loggedIn bool, errMessage string, err error) about the current user session
