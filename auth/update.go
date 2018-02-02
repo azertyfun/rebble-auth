@@ -17,6 +17,10 @@ func UpdateName(database *db.Handler, accessToken string, name string) (bool, st
 		return false, "Not logged in", nil
 	}
 
+	if name == "" {
+		return false, "Name can't be empty", nil
+	}
+
 	errorMessage, err = database.UpdateName(accessToken, name)
 	if err != nil {
 		return false, "Internal server error: Could not update name", err
