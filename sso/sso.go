@@ -3,7 +3,10 @@ package sso
 import (
 	"crypto/rsa"
 	"encoding/base64"
+	"encoding/json"
+	"fmt"
 	"math/big"
+	"net/http"
 	"strings"
 )
 
@@ -12,6 +15,7 @@ type Sso struct {
 	Name         string `json:"name"`
 	ClientID     string `json:"client_id"`
 	ClientSecret string `json:"client_secret"`
+	Type         string `json:"type"`
 	DiscoverURI  string `json:"discover_uri"`
 	RedirectURI  string `json:"redirect_uri"`
 	Scopes       string `json:"scopes"`
@@ -41,6 +45,20 @@ type Key struct {
 
 type Certs struct {
 	Keys []Key `json:"keys"`
+}
+
+type facebookAppTokenStatus struct {
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type"`
+
+	Error facebookError `json:"error"`
+}
+
+type facebookError struct {
+	Message string `json:"message"`
+	Type    string `json:"type"`
+	Code    int    `json:"code"`
+	Trace   string `json:"fbtrace_id"`
 }
 
 func (key *Key) GetPublicKey() (rsa.PublicKey, error) {
@@ -82,4 +100,37 @@ func (key *Key) GetPublicKey() (rsa.PublicKey, error) {
 		N: n,
 		E: e,
 	}, nil
+}
+
+// Initialize populates all necessary fields in the Sso struct
+func (sso Sso) Initialize() (Sso, error) {
+	switch sso.Type {
+	case "oidc":
+		resp, err := http.Get(sso.DiscoverURI)
+		if err != nil {
+			return Sso{}, fmt.Errorf("Could not get discovery apge for SSO %v (HTTP GET failed): %v", sso.Name, err)
+		}
+		if resp.StatusCode/100 != 2 {
+			return Sso{}, fmt.Errorf("Could not get discovery apge for SSO %v (invalid error code %v)", sso.Name, resp.StatusCode)
+		}
+
+		decoder := json.NewDecoder(resp.Body)
+		err = decoder.Decode(&sso.Discovery)
+		if err != nil {
+			return Sso{}, fmt.Errorf("Could not get discovery apge for SSO %v (Could not decode JSON): %v", sso.Name, err)
+		}
+		defer resp.Body.Close()
+
+		break
+	case "facebook":
+		sso.Discovery.AuthorizationEndpoint = "https://www.facebook.com/v2.12/dialog/oauth"
+		sso.Discovery.TokenEndpoint = "https://graph.facebook.com/v2.12/oauth/access_token"
+		sso.Discovery.UserinfoEndpoint = "https://graph.facebook.com/me"
+
+		break
+	default:
+		return Sso{}, fmt.Errorf("Invalid SSO type '%v'", sso.Type)
+	}
+
+	return sso, nil
 }

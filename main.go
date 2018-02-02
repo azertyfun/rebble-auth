@@ -55,25 +55,16 @@ func main() {
 
 	rebbleHandlers.AllowedDomains = config.AllowedDomains
 
+	log.Println("Initializing SSO providers...")
 	for i, sso := range config.Ssos {
-		resp, err := http.Get(sso.DiscoverURI)
+		s, err := sso.Initialize()
 		if err != nil {
-			log.Println("Error: Could not get discovery page for SSO " + sso.Name + " (HTTP GET failed). Please check rebble-auth.json for any mistakes.")
-			log.Println(err)
+			log.Printf("Could not initialize SSO provider %v: %v", config.Ssos[i].Name, err)
+			return
 		}
-		if resp.StatusCode/100 != 2 {
-			log.Println("Error: Could not get discovery page for SSO " + sso.Name + " (invalid error code). Please check rebble-auth.json for any mistakes.")
-			log.Println(err)
-		}
-
-		decoder := json.NewDecoder(resp.Body)
-		err = decoder.Decode(&(config.Ssos[i].Discovery))
-		if err != nil {
-			log.Println("Error: Could not get discovery page for SSO " + sso.Name + " (could not decode JSON). Please check rebble-auth.json for any mistakes.")
-			log.Println(err)
-		}
-		defer resp.Body.Close()
+		config.Ssos[i] = s
 	}
+	log.Println("Done.")
 
 	database, err := sql.Open("sqlite3", config.Database)
 	if err != nil {
@@ -88,6 +79,7 @@ func main() {
 	r := rebbleHandlers.Handlers(context)
 	loggedRouter := handlers.LoggingHandler(os.Stdout, r)
 	http.Handle("/", r)
+	log.Println("Serving HTTP(S)")
 	if config.HTTPS {
 		err = http.ListenAndServeTLS(":8082", "server.crt", "server.key", loggedRouter)
 	} else {

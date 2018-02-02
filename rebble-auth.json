@@ -9,6 +9,7 @@
             "name": "google",
             "client_id": "<client ID>",
             "client_secret": "<client secret>",
+            "type": "oidc",
             "discover_uri": "https://accounts.google.com/.well-known/openid-configuration",
             "redirect_uri": "http://localhost:8082/authorize_callback/google",
             "scopes": "profile email"
@@ -17,6 +18,7 @@
             "name": "yahoo",
             "client_id": "<client ID>",
             "client_secret": "<client secret>",
+            "type": "oidc",
             "discover_uri": "https://login.yahoo.com/.well-known/openid-configuration",
             "redirect_uri": "http://localhost:8082/authorize_callback/yahoo",
             "scopes": "openid sdps-r"
@@ -25,9 +27,18 @@
             "name": "auth0",
             "client_id": "<client ID>",
             "client_secret": "<client secret>",
+            "type": "oidc",
             "discover_uri": "<discover URI>",
             "redirect_uri": "http://localhost:8082/authorize_callback/auth0",
             "scopes": "openid profile email offline_access"
+        },
+        {
+            "name": "facebook",
+            "client_id": "<client ID>",
+            "client_secret": "<client secret>",
+            "type": "facebook",
+            "scopes": "email",
+            "redirect_uri": "http://localhost:8082/authorize_callback/facebook"
         }
     ],
     "database": "./rebble-auth.db"

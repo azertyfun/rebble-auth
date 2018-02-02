@@ -1,14 +1,13 @@
 package auth
 
 import (
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
+	"pebble-dev/rebble-auth/common"
 	"pebble-dev/rebble-auth/db"
 	"pebble-dev/rebble-auth/rebbleJwt"
 	"pebble-dev/rebble-auth/sso"
-	"strings"
+	"time"
 
 	jwt "github.com/dgrijalva/jwt-go"
 )
@@ -25,36 +24,98 @@ type tokensStatus struct {
 	ErrorDescription string `json:"error_description"`
 }
 
+// This is the response from the exchange of the authorization code for access and ID tokens
+type facebookTokensStatus struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int    `json:"expires_in"`
+
+	Error facebookError `json:"error"`
+}
+
+type facebookTokenInformation struct {
+	UserID string `json:"id"`
+	Name   string `json:"name"`
+
+	Error facebookError `json:"error"`
+}
+
+type facebookError struct {
+	Message string `json:"message"`
+	Type    string `json:"type"`
+	Code    int    `json:"code"`
+	Trace   string `json:"fbtrace_id"`
+}
+
 func exchangeTokens(sso sso.Sso, code string) (bool, string, tokensStatus, jwt.MapClaims, error) {
-	v := url.Values{}
-	v.Add("code", code)
-	v.Add("client_id", sso.ClientID)
-	v.Add("client_secret", sso.ClientSecret)
-	v.Add("redirect_uri", sso.RedirectURI)
-	v.Add("grant_type", "authorization_code")
-	resp, err := http.Post(sso.Discovery.TokenEndpoint, "application/x-www-form-urlencoded", strings.NewReader(v.Encode()))
-	if err != nil {
-		return false, "Internal server error: Could not exchange tokens", tokensStatus{}, nil, err
-	}
+	switch sso.Type {
+	case "oidc":
+		v := url.Values{}
+		v.Add("code", code)
+		v.Add("client_id", sso.ClientID)
+		v.Add("client_secret", sso.ClientSecret)
+		v.Add("redirect_uri", sso.RedirectURI)
+		v.Add("grant_type", "authorization_code")
+		var status tokensStatus
+		err := common.Post(sso.Discovery.TokenEndpoint, &v, &status)
+		if err != nil {
+			return false, fmt.Sprintf("Internal server error: Could not exchange tokens: %v", err), tokensStatus{}, nil, err
+		}
 
-	decoder := json.NewDecoder(resp.Body)
-	var status tokensStatus
-	err = decoder.Decode(&status)
-	if err != nil {
-		return false, "Internal server error: Could not decode token information", tokensStatus{}, nil, err
-	}
-	defer resp.Body.Close()
+		if status.Error != "" {
+			return false, "Internal server error: Could not exchange tokens", status, nil, fmt.Errorf("Could not exchange tokens: %v (%v)", status.Error, status.ErrorDescription)
+		}
 
-	if status.Error != "" {
-		return false, "Internal server error: Could not exchange tokens", status, nil, fmt.Errorf("Could not exchange tokens: %v (%v)", status.Error, status.ErrorDescription)
-	}
+		claims, err := rebbleJwt.ParseJwtToken(sso, status.IdToken)
+		if err != nil {
+			return false, "Internal server error: Could not decode token information", status, nil, err
+		}
 
-	claims, err := rebbleJwt.ParseJwtToken(sso, status.IdToken)
-	if err != nil {
-		return false, "Internal server error: Could not decode token information", status, nil, err
-	}
+		return true, "", status, claims, nil
+	case "facebook":
+		v := url.Values{}
+		v.Add("code", code)
+		v.Add("client_id", sso.ClientID)
+		v.Add("client_secret", sso.ClientSecret)
+		v.Add("redirect_uri", sso.RedirectURI)
 
-	return true, "", status, claims, nil
+		var status facebookTokensStatus
+		err := common.Post(sso.Discovery.TokenEndpoint, &v, &status)
+		if err != nil {
+			return false, fmt.Sprintf("Internal server error: Could not exchange tokens: %v", err), tokensStatus{}, nil, err
+		}
+		if status.Error.Message != "" {
+			return false, "Internal server error: Could not exchange tokens", tokensStatus{}, nil, fmt.Errorf("Could not exchange tokens: %v (%v %v)", status.Error.Message, status.Error.Type, status.Error.Code)
+		}
+
+		// Get token information using app token
+		v = url.Values{}
+		v.Add("access_token", status.AccessToken)
+		v.Add("fields", "id,name")
+		var info facebookTokenInformation
+		err = common.Get(sso.Discovery.UserinfoEndpoint, &v, &info)
+		if err != nil {
+			return false, fmt.Sprintf("Internal server error: Could not get token information: %v", err), tokensStatus{}, nil, err
+		}
+		if info.Error.Message != "" || info.UserID == "" {
+			return false, "Internal server error: Could not get token information", tokensStatus{}, nil, fmt.Errorf("Could not get token information: %v (%v %v)", info.Error.Message, info.Error.Type, info.Error.Code)
+		}
+
+		claims := jwt.MapClaims{
+			"sub":  info.UserID,
+			"exp":  float64(time.Now().Unix() + int64(status.ExpiresIn)),
+			"name": info.Name,
+		}
+
+		return true, "", tokensStatus{
+			AccessToken:      status.AccessToken,
+			RefreshToken:     status.RefreshToken,
+			ExpiresIn:        status.ExpiresIn,
+			Error:            status.Error.Message,
+			ErrorDescription: status.Error.Message,
+		}, claims, nil
+	}
+	return false, fmt.Sprintf("Internal server error: Invalid SSO provider type %v", sso.Type), tokensStatus{}, nil, fmt.Errorf("Invalid SSO provider type %v", sso.Type)
 }
 
 // Login attempts to log a user in given an auth provider and a corresponding code
