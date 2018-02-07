@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"pebble-dev/rebble-auth/auth"
+	"pebble-dev/rebble-auth/common"
 
 	"github.com/gorilla/mux"
 )
@@ -21,9 +22,8 @@ type accountLoginStatus struct {
 }
 
 type updateAccount struct {
-	AccessToken string `json:"accessToken"`
-	Name        string `json:"name"`
-	Provider    string `json:"provider"`
+	Name     string `json:"name"`
+	Provider string `json:"provider"`
 }
 
 type updateAccountStatus struct {
@@ -36,10 +36,6 @@ type nameStatus struct {
 	ErrorMessage string `json:"errorMessage"`
 }
 
-type authInfo struct {
-	AccessToken string `json:"accessToken"`
-}
-
 type accountInfo struct {
 	LoggedIn        bool     `json:"loggedIn"`
 	Name            string   `json:"name"`
@@ -50,16 +46,12 @@ type accountInfo struct {
 
 // AccountInfoHandler displays the account information for a given access token
 func AccountInfoHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.Request) (int, error) {
-	decoder := json.NewDecoder(r.Body)
-
-	var authInfo authInfo
-	err := decoder.Decode(&authInfo)
+	accessToken, err := common.GetAccessToken(r)
 	if err != nil {
 		return http.StatusBadRequest, err
 	}
-	defer r.Body.Close()
 
-	loggedIn, errorMessage, name, email, linkedProviders, err := auth.Info(ctx.Database, authInfo.AccessToken)
+	loggedIn, errorMessage, name, email, linkedProviders, err := auth.Info(ctx.Database, accessToken)
 
 	if err != nil {
 		log.Println(err)
@@ -85,16 +77,21 @@ func AccountInfoHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.Requ
 
 // AccountUpdateNameHandler updates a user's real name
 func AccountUpdateNameHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.Request) (int, error) {
+	accessToken, err := common.GetAccessToken(r)
+	if err != nil {
+		return http.StatusBadRequest, err
+	}
+
 	decoder := json.NewDecoder(r.Body)
 
 	var info updateAccount
-	err := decoder.Decode(&info)
+	err = decoder.Decode(&info)
 	if err != nil {
 		return http.StatusBadRequest, err
 	}
 	defer r.Body.Close()
 
-	success, errorMessage, err := auth.UpdateName(ctx.Database, info.AccessToken, info.Name)
+	success, errorMessage, err := auth.UpdateName(ctx.Database, accessToken, info.Name)
 
 	if err != nil {
 		log.Println(err)
@@ -140,16 +137,21 @@ func AccountGetNameHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.R
 
 // AccountRemoveLinkedProviderHandler removes a linked identity provider from a user account
 func AccountRemoveLinkedProviderHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.Request) (int, error) {
+	accessToken, err := common.GetAccessToken(r)
+	if err != nil {
+		return http.StatusBadRequest, err
+	}
+
 	decoder := json.NewDecoder(r.Body)
 
 	var info updateAccount
-	err := decoder.Decode(&info)
+	err = decoder.Decode(&info)
 	if err != nil {
 		return http.StatusBadRequest, err
 	}
 	defer r.Body.Close()
 
-	success, errorMessage, err := auth.RemoveLinkedProvider(ctx.Database, info.AccessToken, info.Provider)
+	success, errorMessage, err := auth.RemoveLinkedProvider(ctx.Database, accessToken, info.Provider)
 
 	if err != nil {
 		log.Println(err)

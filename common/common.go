@@ -3,6 +3,7 @@ package common
 import (
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -73,4 +74,15 @@ func Get(uri string, values *url.Values, authorization string, out interface{}) 
 	resp, err := client.Do(req)
 
 	return decode(resp, err, out)
+}
+
+// GetAccessToken returns the content of the `Authorization` header (stripped of the `Bearer ` part)
+func GetAccessToken(r *http.Request) (string, error) {
+	authorization := r.Header.Get("Authorization")
+	authorizationSplit := strings.SplitAfter(authorization, "Bearer ")
+	if len(authorizationSplit) != 2 {
+		return "", errors.New("Invalid Authorization header")
+	}
+
+	return authorizationSplit[1], nil
 }

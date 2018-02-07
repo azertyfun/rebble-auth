@@ -39,6 +39,16 @@ func (rh routeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// In case of a preflight request caused by the use of an `Authorization` header, we specifically allow it
+	// https://developer.mozilla.org/en-US/docs/Glossary/preflight_request
+	if r.Method == "OPTIONS" {
+		if r.Header.Get("Access-Control-Request-Headers") == "authorization" {
+			w.Header().Set("Access-Control-Allow-Headers", "authorization")
+			return
+		}
+		http.Error(w, "Invalid Access-Control-Request-Headers header", http.StatusBadRequest)
+	}
+
 	// we can process user verification/auth token parsing and authorization here
 
 	// call the handler function

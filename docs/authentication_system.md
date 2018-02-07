@@ -72,12 +72,7 @@ Response:
 
 Request information about the user.
 
-Query:
-```JSON
-{
-    "accessToken": "<access token>",
-}
-```
+`GET` request. Requires `Authorization: Bearer <access token>` header
 
 Response:
 ```JSON
@@ -95,10 +90,11 @@ Otherwise "errorMessage" will be blank.
 
 Change the logged in user's name. Empty field is allowed.
 
+Requires `Authorization: Bearer <access token>` header
+
 Query:
 ```JSON
 {
-    "accessToken": "<access token>",
     "name": "<Name>"
 }
 ```
@@ -115,10 +111,11 @@ Response:
 
 Remove a linked provider from a user's account
 
+Requires `Authorization: Bearer <access token>` header
+
 Query:
 ```JSON
 {
-    "accessToken": "<access token>",
     "provider": "<Provider>"
 }
 ```
