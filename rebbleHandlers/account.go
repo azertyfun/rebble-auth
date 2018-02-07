@@ -43,6 +43,7 @@ type authInfo struct {
 type accountInfo struct {
 	LoggedIn        bool     `json:"loggedIn"`
 	Name            string   `json:"name"`
+	Email           string   `json:"email"`
 	LinkedProviders []string `json:"linkedProviders"`
 	ErrorMessage    string   `json:"errorMessage"`
 }
@@ -58,7 +59,7 @@ func AccountInfoHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.Requ
 	}
 	defer r.Body.Close()
 
-	loggedIn, errorMessage, name, linkedProviders, err := auth.Info(ctx.Database, authInfo.AccessToken)
+	loggedIn, errorMessage, name, email, linkedProviders, err := auth.Info(ctx.Database, authInfo.AccessToken)
 
 	if err != nil {
 		log.Println(err)
@@ -67,6 +68,7 @@ func AccountInfoHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.Requ
 	info := accountInfo{
 		LoggedIn:        loggedIn,
 		Name:            name,
+		Email:           email,
 		LinkedProviders: linkedProviders,
 		ErrorMessage:    errorMessage,
 	}

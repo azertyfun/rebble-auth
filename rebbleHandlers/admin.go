@@ -63,6 +63,7 @@ func AdminRebuildDBHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.R
 			create table users (
 				id text not null primary key,
 				name text not null,
+				email text not null,
 				type text nont null default 'user',
 				pebbleMirror integer not null,
 				disabled integer not null
@@ -137,7 +138,7 @@ func AdminRebuildDBHandler(ctx *HandlerContext, w http.ResponseWriter, r *http.R
 	tx, err := dbHandler.Begin()
 	defer tx.Rollback()
 	for id, user := range users {
-		_, err := tx.Exec("INSERT INTO users(id, name, type, pebbleMirror, disabled) VALUES (?, ?, 'users', 1, 0)", id, user)
+		_, err := tx.Exec("INSERT INTO users(id, name, email, type, pebbleMirror, disabled) VALUES (?, ?, '', 'users', 1, 0)", id, user)
 		if err != nil {
 			log.Printf("Could not insert user into database: %v", err)
 		}

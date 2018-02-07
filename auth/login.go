@@ -38,6 +38,7 @@ type facebookTokensStatus struct {
 type facebookTokenInformation struct {
 	UserID string `json:"id"`
 	Name   string `json:"name"`
+	Email  string `json:"email"`
 
 	Error facebookError `json:"error"`
 }
@@ -127,7 +128,7 @@ func exchangeTokens(sso sso.Sso, code string) (bool, string, tokensStatus, jwt.M
 		// Get token information
 		v = url.Values{}
 		v.Add("access_token", status.AccessToken)
-		v.Add("fields", "id,name")
+		v.Add("fields", "id,name,email")
 		var info facebookTokenInformation
 		err = common.Get(sso.Discovery.UserinfoEndpoint, &v, "", &info)
 		if err != nil {
@@ -138,9 +139,10 @@ func exchangeTokens(sso sso.Sso, code string) (bool, string, tokensStatus, jwt.M
 		}
 
 		claims := jwt.MapClaims{
-			"sub":  info.UserID,
-			"exp":  float64(time.Now().Unix() + int64(status.ExpiresIn)),
-			"name": info.Name,
+			"sub":   info.UserID,
+			"exp":   float64(time.Now().Unix() + int64(status.ExpiresIn)),
+			"name":  info.Name,
+			"email": info.Email,
 		}
 
 		return true, "", tokensStatus{
@@ -195,9 +197,10 @@ func exchangeTokens(sso sso.Sso, code string) (bool, string, tokensStatus, jwt.M
 		}
 
 		claims := jwt.MapClaims{
-			"sub":  info.UserID.ID,
-			"exp":  float64(info.Exp / 1000),
-			"name": user.User.DisplayName,
+			"sub":   info.UserID.ID,
+			"exp":   float64(info.Exp / 1000),
+			"name":  user.User.DisplayName,
+			"email": "",
 		}
 
 		return true, "", tokensStatus{
@@ -239,7 +242,7 @@ func Login(ssos []sso.Sso, database *db.Handler, authProvider string, code strin
 		name = n.(string)
 	}
 
-	accessToken, userErr, err := database.AccountLoginOrRegister(sso.Name, claims["sub"].(string), name, status.AccessToken, status.RefreshToken, int64(claims["exp"].(float64)), remoteAddr)
+	accessToken, userErr, err := database.AccountLoginOrRegister(sso.Name, claims["sub"].(string), name, claims["email"].(string), status.AccessToken, status.RefreshToken, int64(claims["exp"].(float64)), remoteAddr)
 	if err != nil {
 		return false, userErr, "", err
 	}
@@ -265,7 +268,7 @@ func AddProvider(ssos []sso.Sso, database *db.Handler, authProvider string, code
 	}
 
 	// This would normally be handled by the AccountAddProvider function, but we don't want to exchange tokens if we aren't going to store them
-	loggedIn, _, _, err := database.AccountInformation(rebbleAccessToken)
+	loggedIn, _, _, _, err := database.AccountInformation(rebbleAccessToken)
 	if !loggedIn {
 		return false, "Invalid access token", err
 	}

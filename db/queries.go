@@ -60,7 +60,7 @@ func createSession(tx *sql.Tx, provider string, sub string, userId string, ssoAc
 
 // AccountLoginOrRegister attempts to login (or, if the user doesn't yet exist, create a user account)
 // Returns accessToken, errorMessage, error
-func (handler Handler) AccountLoginOrRegister(provider string, sub string, name string, ssoAccessToken string, ssoRefreshToken string, expires int64, remoteIp string) (string, string, error) {
+func (handler Handler) AccountLoginOrRegister(provider string, sub string, name string, email string, ssoAccessToken string, ssoRefreshToken string, expires int64, remoteIp string) (string, string, error) {
 	tx, err := handler.DB.Begin()
 	if err != nil {
 		return "", "Internal server error", err
@@ -101,7 +101,7 @@ func (handler Handler) AccountLoginOrRegister(provider string, sub string, name 
 		}
 
 		// Create user
-		_, err := tx.Exec("INSERT INTO users(id, name, type, pebbleMirror, disabled) VALUES (?, ?, 'user', 0, 0)", userId, name)
+		_, err := tx.Exec("INSERT INTO users(id, name, email, type, pebbleMirror, disabled) VALUES (?, ?, ?, 'user', 0, 0)", userId, name, email)
 		if err != nil {
 			return "", "Internal server error", err
 		}
@@ -138,7 +138,7 @@ func (handler Handler) AccountAddProvider(provider string, sub string, rebbleAcc
 	}
 	defer tx.Rollback()
 
-	loggedIn, _, _, err := handler.AccountInformation(rebbleAccessToken)
+	loggedIn, _, _, _, err := handler.AccountInformation(rebbleAccessToken)
 	if !loggedIn {
 		return "Invalid access token", err
 	}
@@ -190,7 +190,7 @@ func (handler Handler) AccountRemoveProvider(provider string, rebbleAccessToken 
 		return "Can't remove last identity provider!", errors.New("Can't remove last identity provider")
 	}
 
-	loggedIn, _, _, err := handler.AccountInformation(rebbleAccessToken)
+	loggedIn, _, _, _, err := handler.AccountInformation(rebbleAccessToken)
 	if !loggedIn {
 		return "Invalid access token", err
 	}
@@ -230,44 +230,45 @@ func (handler Handler) getAccountId(accessToken string) (string, error) {
 }
 
 // AccountInformation returns information about the account associated to the given access token
-// returns success, name, providers, err
-func (handler Handler) AccountInformation(accessToken string) (bool, string, []string, error) {
+// returns success, name, email, providers, err
+func (handler Handler) AccountInformation(accessToken string) (bool, string, string, []string, error) {
 	userId, err := handler.getAccountId(accessToken)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return false, "", []string{}, nil
+			return false, "", "", []string{}, nil
 		}
 
-		return false, "", []string{}, err
+		return false, "", "", []string{}, err
 	}
 
 	var name string
-	row := handler.DB.QueryRow("SELECT name FROM users WHERE id=?", userId)
-	err = row.Scan(&name)
+	var email string
+	row := handler.DB.QueryRow("SELECT name, email FROM users WHERE id=?", userId)
+	err = row.Scan(&name, &email)
 	if err != nil {
-		return false, "", []string{}, err
+		return false, "", "", []string{}, err
 	}
 
 	var linkedProviders []string
 	rows, err := handler.DB.Query("SELECT provider FROM providerSessions WHERE userid=?", userId)
 	if err != nil {
-		return false, "", []string{}, err
+		return false, "", "", []string{}, err
 	}
 
 	for rows.Next() {
 		provider := ""
 		err := rows.Scan(&provider)
 		if err != nil {
-			return false, "", []string{}, err
+			return false, "", "", []string{}, err
 		}
 		linkedProviders = append(linkedProviders, provider)
 	}
 
 	if name == "" {
-		return true, userId, linkedProviders, nil
+		return true, userId, email, linkedProviders, nil
 	}
 
-	return true, name, linkedProviders, nil
+	return true, name, email, linkedProviders, nil
 }
 
 // SessionInformation returns (loggedIn bool, errMessage string, err error) about the current user session

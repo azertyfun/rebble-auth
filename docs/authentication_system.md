@@ -84,6 +84,7 @@ Response:
 {
     "loggedIn": boolean,
     "name": "<name>",
+    "email": "<e-mail address>",
     "errorMessage": "<Error message>"
 }
 ```
